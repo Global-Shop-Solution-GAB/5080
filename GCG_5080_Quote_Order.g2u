@@ -1,0 +1,88 @@
+Program.Sub.Preflight.Start
+
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'BN, June 8, 2018
+'Customer:  U.S. Bolt Manufacturing, Inc.
+'Specs: 
+'At the Post Save hook (Post Move To Sales Order Hook) of the Win Quote, a custom process will be triggered.  
+'At this point all Sales Order lines that were won will be updated to match the line number they had on the Quote.  
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.iFlag.Declare
+
+	'ERQ > Transactions > Quote Won/Loss  - Post Move To Sales Order Hook      
+	f.Intrinsic.Control.If(v.Caller.Hook,=,17301)
+		F.Intrinsic.UI.MsgBox ("Do you want to match Order Lines number with Quote Lines number?","Match Order Lines with Quote Lines",4,v.Local.iFlag)
+		'User say Yes
+		f.Intrinsic.Control.If(v.Local.iFlag,=,6)
+			f.Intrinsic.Control.CallSub("Process_Won_Quote")		
+		f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	Function.Intrinsic.String.Concat("Subroutine Error",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.Unload.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+
+	F.Intrinsic.Control.If(V.ODBC.conx.State,=,1)
+		F.ODBC.Connection!conx.close
+	F.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	Function.Intrinsic.String.Concat("Subroutine Error",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Unload.End
+
+Program.Sub.Process_Won_Quote.Start
+f.Intrinsic.Control.Try
+	v.Local..BulkDeclareString(sError,sSQL)
+	v.Local.i1.Declare
+	
+	f.Intrinsic.UI.InvokeWaitDialog("Matching Sales Order Lines with Quote Lines...")
+	F.ODBC.Connection!conx.OpenCompanyConnection
+	'Order_Lines.Record_Type is a key column, so we cannot use Update query. We can delete the old records and add new ones.
+	f.Intrinsic.String.Build("Select * from Order_Lines where Order_No = '{0}' and Record_Type = 'L' Order By Record_No",v.Passed.ORDER,V.Local.sSQL)
+	f.Data.DataTable.CreateFromSQL("Order","conx",v.Local.sSQL,True)
+	f.Intrinsic.String.Build("Select Record_No from Quote_Lines where Quote_No = '{0}'and Record_Type = 'L' and Quote_Won = 'W' order by Record_no",v.Passed.QUOTE,v.Local.sSQL)
+	f.Data.DataTable.CreateFromSQL("Quote","conx",v.Local.sSQL,True)
+	f.Intrinsic.Control.If(v.DataTable.Order.RowCount,=,v.DataTable.Quote.RowCount)
+		f.Intrinsic.Control.For(v.Local.i1,0,v.DataTable.Order.RowCount--,1)
+			f.Data.DataTable.SetValue("Order",v.Local.i1,"Record_No",v.DataTable.Quote(v.Local.i1).Record_No!FieldValString)
+		f.Intrinsic.Control.Next(v.Local.i1)
+		f.Intrinsic.String.Build("Delete from Order_Lines where Order_No = '{0}' and Record_Type = 'L'",v.Passed.ORDER,V.Local.sSQL)
+		f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+		f.Data.DataTable.SaveToDB("Order","conx","Order_Lines","",128)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.UI.Msgbox("Quote and Order do not have the same number of lines","Cannot match")		
+	f.Intrinsic.Control.EndIf
+	
+	f.ODBC.Connection!conx.Close
+	f.Intrinsic.UI.CloseWaitDialog
+	
+F.Intrinsic.Control.Catch
+	Function.Intrinsic.String.Concat("Subroutine Error",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.Process_Won_Quote.End
+
+Program.Sub.Comments.Start
+${$0$}$$}$WAW$}$5/15/2017 8:12:22 AM$}$True
+'BN, June 8, 2018
+'Customer:  U.S. Bolt Manufacturing, Inc.
+'Specs: 
+'On the Post save hook of the Win quote a custom process will be triggered.  
+'At this point all sales order lines that were won will be updated to match the line number they had on the Quote.  
+Program.Sub.Comments.End
